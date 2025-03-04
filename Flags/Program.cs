@@ -48,7 +48,7 @@ class Program
         }
 
         PrintWithThreadId($"Starting");
-        var url = "https://restcountries.com/v2/regionalbloc/eu";
+        var url = "https://formationdataaccount.blob.core.windows.net/formationdata/eu.json";
         var client = new HttpClient();
 
         PrintWithThreadId($"Getting stream from {url}");
@@ -56,15 +56,15 @@ class Program
         if (token.IsCancellationRequested) return;
         PrintWithThreadId($"Stream retrieved from {url}, deserializing");
 
-        var countries = await JsonSerializer.DeserializeAsync<List<Country>>(stream, cancellationToken: token);
+        var countries = JsonSerializer.DeserializeAsyncEnumerable<Country>(stream, cancellationToken: token);
         if (token.IsCancellationRequested) return;
-        PrintWithThreadId($"{countries!.Count} countries deserialized, starting flag download");
+        PrintWithThreadId($"countries deserialized, starting flag download");
 
-        foreach (var country in countries)
+        await foreach (var country in countries)
         {
             if (token.IsCancellationRequested) return;
 
-            var flagUrl = country.flag;
+            var flagUrl = country!.flag;
             PrintWithThreadId($"Starting flag download for {country.name} at {country.flag}");
             using var flagStream = await client.GetStreamAsync(flagUrl, token);
             if (token.IsCancellationRequested) return;
@@ -92,11 +92,11 @@ class Program
     }
 }
 
-public class Country
+public record Country
 {
-    public string? name { get; set; }
-    public string? capital { get; set; }
-    public string? flag { get; set; }
+    public required string name { get; set; }
+    public required string capital { get; set; }
+    public required string flag { get; set; }
     public int population { get; set; }
     public double area { get; set; }
 }
