@@ -56,33 +56,37 @@ class Program
         if (token.IsCancellationRequested) return;
         PrintWithThreadId($"Stream retrieved from {url}, deserializing");
 
-        var countries = JsonSerializer.DeserializeAsyncEnumerable<Country>(stream, cancellationToken: token);
+        var countries = await JsonSerializer.DeserializeAsync<IEnumerable<Country>>(stream, cancellationToken: token);
         if (token.IsCancellationRequested) return;
         PrintWithThreadId($"countries deserialized, starting flag download");
 
-        await foreach (var country in countries)
-        {
-            if (token.IsCancellationRequested) return;
+        Task.WaitAll(
+            countries!
+                .Select(country =>
+                    Task.Run(async () =>
+                    {
+                        if (token.IsCancellationRequested) return;
 
-            var flagUrl = country!.flag;
-            PrintWithThreadId($"Starting flag download for {country.name} at {country.flag}");
-            using var flagStream = await client.GetStreamAsync(flagUrl, token);
-            if (token.IsCancellationRequested) return;
+                        var flagUrl = country!.flag;
+                        PrintWithThreadId($"Starting flag download for {country.name} at {country.flag}");
+                        using var flagStream = await client.GetStreamAsync(flagUrl, token);
+                        if (token.IsCancellationRequested) return;
 
-            var localFlagFileName = Path.Combine(rootDir, country.name + ".svg");
-            PrintWithThreadId($"Retrieved flag from {country.flag}, writing to {localFlagFileName}");
-            using (var localFlag = File.Create(localFlagFileName))
-            {
-                await flagStream.CopyToAsync(localFlag, token);
-                if (token.IsCancellationRequested) return;
-            }
-            PrintWithThreadId($"Flag written to {localFlagFileName}, opening in browser");
+                        var localFlagFileName = Path.Combine(rootDir, country.name + ".svg");
+                        PrintWithThreadId($"Retrieved flag from {country.flag}, writing to {localFlagFileName}");
+                        using (var localFlag = File.Create(localFlagFileName))
+                        {
+                            await flagStream.CopyToAsync(localFlag, token);
+                            if (token.IsCancellationRequested) return;
+                        }
+                        PrintWithThreadId($"Flag written to {localFlagFileName}, opening in browser");
 
-            var psi = new ProcessStartInfo(localFlagFileName) { UseShellExecute = true };
-            Process.Start(psi);
-            PrintWithThreadId($"Browser opened on {localFlagFileName}");
-        }
-
+                        var psi = new ProcessStartInfo(localFlagFileName) { UseShellExecute = true };
+                        Process.Start(psi);
+                        PrintWithThreadId($"Browser opened on {localFlagFileName}");
+                    }))
+                .ToArray()
+        , token);
         PrintWithThreadId("Finished");
     }
 
